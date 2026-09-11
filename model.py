@@ -11,7 +11,7 @@ df.drop("Unnamed: 32", axis=1, inplace=True)
 df["diagnosis"] = (df["diagnosis"] == "M").astype(int)
 
 
-X = df[df.columns[2:]].values
+X = df[df.columns[2:]]
 y = df["diagnosis"].values
 X_train, X_test, y_train, y_test = train_test_split(
     X, y, test_size=0.2, random_state=1, stratify=y)

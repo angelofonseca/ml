@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Classificador de Exame</title>
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --card: #ffffff;
+      --text: #1c2433;
+      --muted: #6a7486;
+      --border: #dde2ea;
+      --accent: #2f6df6;
+      --malignant: #d13438;
+      --benign: #1a8754;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 40px 16px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      justify-content: center;
+    }
+
+    main {
+      width: 100%;
+      max-width: 560px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 24px;
+    }
+
+    .subtitle {
+      margin: 0 0 24px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .dropzone {
+      display: block;
+      width: 100%;
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 32px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+
+    .dropzone:hover,
+    .dropzone.dragging {
+      border-color: var(--accent);
+      background: #f0f5ff;
+    }
+
+    .dropzone strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 15px;
+    }
+
+    .dropzone span {
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .filename {
+      margin-top: 12px;
+      text-align: center;
+      font-size: 14px;
+      color: var(--text);
+      word-break: break-all;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    button {
+      margin-top: 16px;
+      width: 100%;
+      padding: 12px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:disabled {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+
+    .error {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: #fdecec;
+      color: var(--malignant);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .result {
+      margin-top: 20px;
+      text-align: center;
+    }
+
+    .verdict {
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: .5px;
+    }
+
+    .verdict.malignant {
+      color: var(--malignant);
+    }
+
+    .verdict.benign {
+      color: var(--benign);
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <h1>Classificador de Exame</h1>
+    <p class="subtitle">
+      Envie o CSV do exame com uma única linha de dados e as 30 medidas
+      (<code>radius_mean</code> … <code>fractal_dimension_worst</code>) no cabeçalho.
+      As colunas <code>id</code> e <code>diagnosis</code>, se existirem, são ignoradas.
+    </p>
+
+    <div class="card">
+      <form id="form">
+        <label class="dropzone" id="dropzone" for="file">
+          <strong>Escolher arquivo do exame</strong>
+          <span>clique aqui ou arraste o CSV</span>
+        </label>
+        <input type="file" id="file" name="file" accept=".csv,text/csv">
+        <div class="filename" id="filename" hidden></div>
+        <button type="submit" id="submit" disabled>Analisar</button>
+      </form>
+
+      <div class="error" id="error" hidden></div>
+
+      <div class="result" id="result" hidden>
+        <div class="verdict" id="verdict"></div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const form = document.getElementById("form");
+    const input = document.getElementById("file");
+    const dropzone = document.getElementById("dropzone");
+    const filename = document.getElementById("filename");
+    const submit = document.getElementById("submit");
+    const errorBox = document.getElementById("error");
+    const result = document.getElementById("result");
+    const verdict = document.getElementById("verdict");
+
+    function showFile() {
+      const file = input.files[0];
+      if (file) {
+        filename.textContent = file.name;
+        filename.hidden = false;
+        submit.disabled = false;
+      } else {
+        filename.hidden = true;
+        submit.disabled = true;
+      }
+      errorBox.hidden = true;
+      result.hidden = true;
+    }
+
+    input.addEventListener("change", showFile);
+
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("dragging");
+    });
+
+    dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragging"));
+
+    dropzone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropzone.classList.remove("dragging");
+      if (e.dataTransfer.files.length) {
+        input.files = e.dataTransfer.files;
+        showFile();
+      }
+    });
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      if (!input.files[0]) return;
+
+      submit.disabled = true;
+      submit.textContent = "Analisando…";
+      errorBox.hidden = true;
+      result.hidden = true;
+
+      const data = new FormData();
+      data.append("file", input.files[0]);
+
+      try {
+        const response = await fetch("/predict", { method: "POST", body: data });
+        const payload = await response.json();
+
+        if (!response.ok) {
+          errorBox.textContent = payload.detail || "Não foi possível analisar o arquivo.";
+          errorBox.hidden = false;
+          return;
+        }
+
+        const malignant = payload.diagnosis === "Maligno";
+
+        verdict.textContent = payload.diagnosis.toUpperCase();
+        verdict.className = "verdict " + (malignant ? "malignant" : "benign");
+        result.hidden = false;
+      } catch (err) {
+        errorBox.textContent = "Falha na comunicação com o servidor.";
+        errorBox.hidden = false;
+      } finally {
+        submit.disabled = false;
+        submit.textContent = "Analisar";
+      }
+    });
+  </script>
+</body>
+
+</html>
